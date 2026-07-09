@@ -3,23 +3,23 @@
   "nodes": [
     {
       "parameters": {
-        "mailbox": "AI-Newsletters",
+        "mailbox": "The Rundown AI",
         "options": {
-          "forceReconnect": 5,
-          "trackLastMessageId": true
+          "forceReconnect": 1,
+          "trackLastMessageId": false
         }
       },
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2.1,
       "position": [
-        -352,
-        -192
+        -224,
+        0
       ],
-      "id": "69f22d02-b1a2-4fc5-9689-ac0a9ecfae01",
+      "id": "f5ede585-39db-4865-bde7-8e3b6c67edee",
       "name": "Email Trigger (IMAP)",
       "credentials": {
         "imap": {
-          "id": "jGl70fTQeysqOvys",
+          "id": "gbT4DAK46m8ewcQL",
           "name": "IMAP account"
         }
       }
@@ -60,10 +60,10 @@
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
-        -144,
-        -192
+        -16,
+        0
       ],
-      "id": "3210cefe-bc06-44d3-9bb1-15834e2c5333",
+      "id": "d43c7923-c9d9-4915-b311-99010ed2996c",
       "name": "Filter"
     },
     {
@@ -75,75 +75,60 @@
       "type": "n8n-nodes-base.markdown",
       "typeVersion": 1,
       "position": [
-        64,
-        -192
+        192,
+        0
       ],
-      "id": "c6abf7f9-436e-40b4-a091-1b5ef305eef9",
+      "id": "d9a654d6-e5cf-4794-a47b-cdc893fed8b5",
       "name": "Markdown"
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const source = $json.markdown ?? '';\n\nconst cleaned = source\n  // Удаляем только изображения, но сохраняем текстовые ссылки\n  .replace(/!\\[[^\\]]*]\\([^)]+\\)/g, '')\n\n  // Убираем дополнительный Outlook SafeLink из title.\n  // Основная ссылка остаётся без изменений:\n  // [текст](основной-url \"дублирующий-url\") → [текст](основной-url)\n  .replace(\n    /\\[([^\\]]*)\\]\\((https?:\\/\\/[^\\s)]+)\\s+\"[^\"]*\"\\)/g,\n    '[$1]($2)'\n  )\n\n  // Удаляем пустые ссылки без текста\n  .replace(/\\[\\s*]\\([^)]+\\)/g, '')\n\n  // Удаляем технические строки из десятков дефисов\n  .replace(/^[\\s|]*-{20,}[\\s|]*$/gm, '')\n\n  // Удаляем пустые Markdown-заголовки\n  .replace(/^\\s*#{1,6}\\s*$/gm, '')\n\n  // Убираем пробелы в конце строк\n  .replace(/[ \\t]+$/gm, '')\n\n  // Ограничиваем количество пустых строк\n  .replace(/\\n{4,}/g, '\\n\\n\\n')\n\n  .trim();\n\nconst trigger = $('Email Trigger (IMAP)').first().json;\n\nreturn {\n  json: {\n    subject: trigger.subject ?? 'Без темы',\n    from: trigger.from ?? '',\n    cleanedMarkdown: cleaned,\n    charactersBefore: source.length,\n    charactersAfter: cleaned.length,\n  },\n};"
+        "jsCode": "const source = $json.markdown ?? '';\n\nconst urlMap = {};\nlet urlCounter = 0;\n\nfunction createUrlPlaceholder(url) {\n  urlCounter++;\n  const placeholder = `__URL_${urlCounter}__`;\n  urlMap[placeholder] = url;\n  return placeholder;\n}\n\nfunction isHugeMarkdownSeparatorLine(line) {\n  const trimmed = line.trim();\n\n  if (!trimmed) return false;\n\n  // Удаляем пробелы, пайпы и двоеточия.\n  // Если после этого остались только дефисы — это Markdown separator.\n  const withoutTableChars = trimmed.replace(/[|\\s:]/g, '');\n\n  return (\n    trimmed.length > 80 &&\n    /^-+$/.test(withoutTableChars)\n  );\n}\n\nfunction unwrapHugeLayoutTableLine(line) {\n  const trimmed = line.trim();\n\n  // HTML-to-Markdown иногда превращает всю рассылку в одну гигантскую строку таблицы:\n  // | content | content |\n  // Нам это не нужно для перевода, поэтому разворачиваем такую строку в обычный текст.\n  if (\n    trimmed.length > 500 &&\n    trimmed.startsWith('|') &&\n    trimmed.endsWith('|') &&\n    !isHugeMarkdownSeparatorLine(trimmed)\n  ) {\n    return trimmed\n      .replace(/^\\|\\s*/, '')\n      .replace(/\\s*\\|$/, '')\n      // Заменяем реальные разделители ячеек на абзацы.\n      // Экранированные \\| не трогаем.\n      .replace(/([^\\\\])\\s+\\|\\s+/g, '$1\\n\\n');\n  }\n\n  return line;\n}\n\nconst cleaned = source\n  // Удаляем изображения, но сохраняем текстовые ссылки\n  .replace(/!\\[[^\\]]*]\\([^)]+\\)/g, '')\n\n  // Убираем дополнительный Outlook SafeLink из title:\n  // [text](main-url \"duplicate-url\") → [text](main-url)\n  .replace(\n    /\\[([^\\]]*)\\]\\((https?:\\/\\/[^\\s)]+)\\s+\"[^\"]*\"\\)/g,\n    '[$1]($2)'\n  )\n\n  // Заменяем URL внутри Markdown-ссылок на плейсхолдеры\n  .replace(\n    /\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g,\n    (_match, linkText, url) => {\n      const placeholder = createUrlPlaceholder(url);\n      return `[${linkText}](${placeholder})`;\n    }\n  )\n\n  // Удаляем пустые ссылки без текста\n  .replace(/\\[\\s*]\\([^)]+\\)/g, '')\n\n  // Построчная очистка\n  .split('\\n')\n  .map(unwrapHugeLayoutTableLine)\n  .filter(line => !isHugeMarkdownSeparatorLine(line))\n  .join('\\n')\n\n  // Удаляем пустые Markdown-заголовки\n  .replace(/^\\s*#{1,6}\\s*$/gm, '')\n\n  // Убираем подпись пересланного/отправленного письма, если она есть\n  .replace(/\\n---\\s*\\n\\\\--[\\s\\S]*$/m, '')\n\n  // Убираем пробелы в конце строк\n  .replace(/[ \\t]+$/gm, '')\n\n  // Ограничиваем количество пустых строк\n  .replace(/\\n{4,}/g, '\\n\\n\\n')\n\n  .trim();\n\nconst trigger = $('Email Trigger (IMAP)').first().json;\n\nreturn {\n  json: {\n    subject: trigger.subject ?? 'Без темы',\n    from: trigger.from ?? '',\n    cleanedMarkdown: cleaned,\n    urlMap,\n    urlCount: Object.keys(urlMap).length,\n    charactersBefore: source.length,\n    charactersAfter: cleaned.length,\n    approxTokensBefore: Math.ceil(source.length / 4),\n    approxTokensAfter: Math.ceil(cleaned.length / 4),\n  },\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        224,
-        -192
+        352,
+        0
       ],
-      "id": "15ea433d-137a-4aa8-8d4b-bd22c8dc8676",
+      "id": "beda1de5-cd9d-466e-a09f-007e327054cb",
       "name": "Code in JavaScript"
     },
     {
       "parameters": {
         "modelId": {
           "__rl": true,
-          "value": "gpt-4.1",
+          "value": "gpt-5-mini",
           "mode": "list",
-          "cachedResultName": "GPT-4.1"
+          "cachedResultName": "GPT-5-MINI"
         },
         "responses": {
           "values": [
             {
-              "content": "=Переведи следующую email-рассылку с английского языка на русский максимально дословно и полно.\n\nСтрогие правила:\n\n* Переведи весь переданный текст полностью.\n* Не сокращай текст.\n* Не делай саммари, пересказ или выводы.\n* Не пропускай рекламу, подписи, списки, заголовки и отдельные блоки.\n* Не добавляй собственные пояснения, вступления или комментарии.\n* Не улучшай стиль автора и не перефразируй без необходимости.\n* Сохраняй исходный порядок всех элементов.\n* Сохраняй абзацы, заголовки, маркированные и нумерованные списки, цитаты, эмодзи, жирное выделение и курсив.\n* Не превращай обычные абзацы в списки.\n* Не объединяй несколько абзацев в один.\n* Не разбивай один абзац на список, если в оригинале списка не было.\n* Сохраняй Markdown-разметку.\n\nПравила для ссылок:\n\n* Все Markdown-ссылки должны оставаться в формате:\n\n[переведённый текст ссылки](исходный URL)\n\n* Переводи только текст внутри квадратных скобок.\n* URL внутри круглых скобок не изменяй ни одним символом.\n* Не сокращай URL.\n* Не удаляй параметры URL.\n* Не декодируй URL.\n* Не выводи URL отдельно в виде голого текста.\n* Не превращай Markdown-ссылки в HTML.\n\nДополнительные правила:\n\n* Названия компаний, брендов, продуктов, моделей и сервисов не переводи.\n* Имена людей не переводи.\n* Названия разделов переводи максимально близко к оригиналу.\n* “The Rundown:” переводи как “Обзор:”.\n* “The details:” переводи как “Подробности:”.\n* “Why it matters:” переводи как “Почему это важно:”.\n* “Step-by-step:” переводи как “Пошагово:”.\n* “Presented by” переводи как “При поддержке”.\n* “Quick Hits” переводи как “Коротко”.\n* Не используй кодовый блок вокруг ответа.\n* Верни только готовый перевод в Markdown.\n\nEMAIL ДЛЯ ПЕРЕВОДА:\n\n{{ $json.cleanedMarkdown }}\n\n"
+              "content": "=Translate the following email newsletter from English to Russian accurately, completely, and naturally.\n\nImportant:\n- Preserve the full meaning and all factual details.\n- Do not summarize, shorten, omit, or add anything.\n- Use fluent, natural Russian, not word-for-word machine translation.\n- Adapt idioms and newsletter-style phrases so they sound natural in Russian.\n- Preserve Markdown structure, paragraphs, headings, lists, emojis, bold and italic.\n- Preserve placeholders like __URL_1__ unchanged.\n- In Markdown links, translate only the visible link text.\n- Do not use a code block.\n- Return only the finished Russian translation.\n\nStyle:\n- Russian should sound like a professional tech/news newsletter.\n- Avoid awkward literal translations.\n- Prefer clear journalistic Russian.\n- Keep company, product, service, model and person names unchanged.\n- Translate “AI” as “ИИ” when it means the technology.\n- If “AI” refers to the AI industry, AI companies, AI leaders, or AI community, translate contextually, e.g. “ИИ-индустрия”, “представители ИИ-индустрии”, “ИИ-компании”.\n\nFixed terms:\n\"The Rundown:\" = \"Обзор:\"\n\"The details:\" = \"Подробности:\"\n\"Why it matters:\" = \"Почему это важно:\"\n\"Step-by-step:\" = \"Пошагово:\"\n\"Presented by\" = \"При поддержке\"\n\"Together with\" = \"Совместно с\"\n\"Quick Hits\" = \"Коротко\"\n\"Going further:\" = \"Если хотите больше:\"\n\"Image source:\" = \"Источник изображения:\"\n\nEMAIL:\n{{$json.cleanedMarkdown}}\n"
             }
           ]
         },
         "builtInTools": {},
-        "options": {}
+        "options": {
+          "maxTokens": 12000
+        }
       },
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 2.1,
       "position": [
-        384,
-        -192
+        544,
+        0
       ],
-      "id": "7318f7db-3bc4-487e-a403-f1a9c2f68473",
+      "id": "b1b06c24-908f-4ba6-9e15-8eea9506e180",
       "name": "Message a model",
       "credentials": {
         "openAiApi": {
-          "id": "pHCGwosEWTZrJCl6",
-          "name": "IMAP"
+          "id": "euZmOdmUB2KhcVTe",
+          "name": "OpenAI account"
         }
       }
-    },
-    {
-      "parameters": {
-        "operation": "toText",
-        "sourceProperty": "htmlDocument",
-        "options": {
-          "fileName": "newsletter-ru.html"
-        }
-      },
-      "type": "n8n-nodes-base.convertToFile",
-      "typeVersion": 1.1,
-      "position": [
-        1088,
-        -192
-      ],
-      "id": "22322978-4a31-4641-b5bc-51904909251f",
-      "name": "Convert to File"
     },
     {
       "parameters": {
@@ -152,56 +137,96 @@
         "binaryData": true,
         "additionalFields": {
           "parse_mode": "Markdown"
-        }
+        },
+        "binaryPropertyName": "data"
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1280,
-        -192
+        1840,
+        0
       ],
-      "id": "34bdaf5c-b0e4-4096-bc5c-1d7d55af3488",
+      "id": "18695e91-1574-4c27-ac6c-203ca3f96366",
       "name": "Send a document",
       "webhookId": "aed96890-a7cc-4125-a0eb-fa07b4f7c296",
       "credentials": {
         "telegramApi": {
-          "id": "QWQ3NOOVjjOtdJGW",
-          "name": "The Rundown"
+          "id": "NzmtvJ2taUI5bLtM",
+          "name": "Telegram account"
         }
       }
     },
     {
       "parameters": {
         "mode": "markdownToHtml",
-        "markdown": "={{ $json.output[0].content[0].text }}",
+        "markdown": "={{ $json.translatedMarkdown }}",
         "destinationKey": "html",
         "options": {}
       },
       "type": "n8n-nodes-base.markdown",
       "typeVersion": 1,
       "position": [
-        688,
-        -192
+        1248,
+        0
       ],
-      "id": "873c8e91-5f2f-4b88-8bde-dd8628d60b49",
+      "id": "110f5079-5f3e-480d-8109-22532ced96cb",
       "name": "Markdown1"
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const content = $json.html ?? '';\n\nconst fullHtml = `<!doctype html>\n<html lang=\"ru\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Переведённая рассылка</title>\n\n  <style>\n    body {\n      margin: 0;\n      padding: 0;\n      background: #f4f4f4;\n      font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Arial, sans-serif;\n      color: #1f2937;\n      line-height: 1.65;\n    }\n\n    .page {\n      max-width: 760px;\n      margin: 0 auto;\n      padding: 20px 14px 48px;\n    }\n\n    .article {\n      background: #ffffff;\n      border-radius: 16px;\n      padding: 24px;\n      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);\n      overflow-wrap: anywhere;\n    }\n\n    h1, h2, h3, h4, h5, h6 {\n      line-height: 1.25;\n      margin-top: 1.6em;\n      margin-bottom: 0.65em;\n      color: #111827;\n    }\n\n    h1 {\n      font-size: 30px;\n    }\n\n    h2 {\n      font-size: 24px;\n      padding-bottom: 8px;\n      border-bottom: 1px solid #e5e7eb;\n    }\n\n    h3 {\n      font-size: 21px;\n    }\n\n    h4 {\n      font-size: 19px;\n    }\n\n    p {\n      margin: 0 0 1em;\n      font-size: 17px;\n    }\n\n    ul, ol {\n      padding-left: 24px;\n      margin: 0 0 1.2em;\n    }\n\n    li {\n      margin-bottom: 0.55em;\n      font-size: 17px;\n    }\n\n    blockquote {\n      margin: 1.4em 0;\n      padding: 12px 16px;\n      border-left: 4px solid #9ca3af;\n      background: #f9fafb;\n    }\n\n    a {\n      color: #2563eb;\n      text-decoration: underline;\n      text-underline-offset: 2px;\n    }\n\n    strong {\n      color: #111827;\n    }\n\n    hr {\n      border: 0;\n      border-top: 1px solid #e5e7eb;\n      margin: 2em 0;\n    }\n\n    @media (max-width: 600px) {\n      .page {\n        padding: 0;\n      }\n\n      .article {\n        border-radius: 0;\n        padding: 20px 16px 40px;\n        box-shadow: none;\n      }\n\n      h1 {\n        font-size: 26px;\n      }\n\n      h2 {\n        font-size: 22px;\n      }\n\n      h3 {\n        font-size: 20px;\n      }\n\n      p, li {\n        font-size: 17px;\n      }\n    }\n  </style>\n</head>\n\n<body>\n  <main class=\"page\">\n    <article class=\"article\">\n      ${content}\n    </article>\n  </main>\n</body>\n</html>`;\n\nreturn {\n  json: {\n    htmlDocument: fullHtml,\n  },\n};"
+        "jsCode": "const content = $json.html ?? '';\n\nconst dateLabel = new Date().toLocaleDateString('ru-RU', {\n  day: 'numeric',\n  month: 'long',\n  year: 'numeric',\n});\n\nconst fullHtml = `<!doctype html>\n<html lang=\"ru\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>The Rundown AI — Дайджест</title>\n\n  <style>\n    :root {\n      --text: #1a1d21;\n      --muted: #57646b;\n      --rule: #d6dedb;\n      --accent: #1f6f5c;\n      --bg: #ffffff;\n      --surface: #eef1f0;\n      --font-sans: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif;\n      --font-mono: ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace;\n    }\n\n    @media (prefers-color-scheme: dark) {\n      :root {\n        --text: #e7e9ea;\n        --muted: #9aa4a9;\n        --rule: #2a3134;\n        --accent: #4fd8b8;\n        --bg: #14171a;\n        --surface: #0c0e10;\n      }\n    }\n\n    :root[data-theme=\"dark\"] {\n      --text: #e7e9ea;\n      --muted: #9aa4a9;\n      --rule: #2a3134;\n      --accent: #4fd8b8;\n      --bg: #14171a;\n      --surface: #0c0e10;\n    }\n\n    :root[data-theme=\"light\"] {\n      --text: #1a1d21;\n      --muted: #57646b;\n      --rule: #d6dedb;\n      --accent: #1f6f5c;\n      --bg: #ffffff;\n      --surface: #eef1f0;\n    }\n\n    * {\n      box-sizing: border-box;\n    }\n\n    html, body {\n      margin: 0;\n      padding: 0;\n      background: var(--surface);\n    }\n\n    body {\n      font-family: var(--font-sans);\n      color: var(--text);\n      line-height: 1.62;\n      font-size: 16px;\n    }\n\n    .page {\n      max-width: 680px;\n      margin: 0 auto;\n      padding: 48px 56px 64px;\n      background: var(--bg);\n    }\n\n    .masthead {\n      padding-bottom: 20px;\n      margin-bottom: 32px;\n      border-bottom: 2px solid var(--rule);\n    }\n\n    .masthead .kicker {\n      font-family: var(--font-mono);\n      font-size: 12px;\n      letter-spacing: 0.12em;\n      text-transform: uppercase;\n      color: var(--accent);\n      margin: 0 0 10px;\n    }\n\n    .masthead .title {\n      font-family: var(--font-sans);\n      font-size: 28px;\n      font-weight: 700;\n      margin: 0 0 8px;\n      letter-spacing: -0.01em;\n      text-wrap: balance;\n    }\n\n    .masthead .date {\n      font-family: var(--font-mono);\n      font-size: 13px;\n      color: var(--muted);\n      margin: 0;\n    }\n\n    article h1, article h2, article h3, article h4 {\n      font-family: var(--font-sans);\n      font-weight: 700;\n      color: var(--text);\n      line-height: 1.3;\n      text-wrap: balance;\n    }\n\n    article h1 {\n      font-size: 24px;\n      margin: 1.8em 0 0.6em;\n    }\n\n    article h2 {\n      font-family: var(--font-mono);\n      font-size: 12px;\n      font-weight: 600;\n      color: var(--accent);\n      text-transform: uppercase;\n      letter-spacing: 0.08em;\n      margin: 2.4em 0 0.9em;\n      padding-bottom: 8px;\n      border-bottom: 1px solid var(--rule);\n    }\n\n    article h3 {\n      font-size: 18px;\n      margin: 1.8em 0 0.5em;\n    }\n\n    article h4 {\n      font-size: 16px;\n      margin: 1.6em 0 0.5em;\n    }\n\n    p, li {\n      margin: 0 0 1em;\n    }\n\n    ul, ol {\n      padding-left: 1.3em;\n      margin: 0 0 1.2em;\n    }\n\n    li {\n      margin-bottom: 0.5em;\n    }\n\n    blockquote {\n      margin: 1.5em 0;\n      padding: 2px 0 2px 18px;\n      border-left: 3px solid var(--accent);\n      color: var(--muted);\n    }\n\n    a {\n      color: var(--accent);\n      text-decoration: underline;\n      text-underline-offset: 2px;\n      word-break: break-word;\n    }\n\n    strong {\n      color: var(--text);\n    }\n\n    hr {\n      border: 0;\n      border-top: 1px solid var(--rule);\n      margin: 2.5em 0;\n    }\n\n    .colophon {\n      margin-top: 3em;\n      padding-top: 1.4em;\n      border-top: 1px solid var(--rule);\n      font-family: var(--font-mono);\n      font-size: 11px;\n      letter-spacing: 0.04em;\n      text-transform: uppercase;\n      color: var(--muted);\n    }\n\n    @page {\n      size: A4;\n      margin: 22mm 18mm;\n    }\n\n    @media print {\n      :root {\n        --text: #1a1d21;\n        --muted: #57646b;\n        --rule: #d6dedb;\n        --accent: #1f6f5c;\n        --bg: #ffffff;\n        --surface: #ffffff;\n      }\n\n      .page {\n        max-width: none;\n        padding: 0;\n      }\n\n      a {\n        color: var(--text);\n        text-decoration: underline;\n      }\n\n      article h1, article h2, article h3, article h4 {\n        break-after: avoid;\n      }\n\n      blockquote, ul, ol, table {\n        break-inside: avoid;\n      }\n    }\n  </style>\n</head>\n\n<body>\n  <main class=\"page\">\n    <header class=\"masthead\">\n      <p class=\"kicker\">The Rundown AI · Дайджест</p>\n      <h1 class=\"title\">Новости искусственного интеллекта</h1>\n      <p class=\"date\">${dateLabel}</p>\n    </header>\n    <article>\n      ${content}\n    </article>\n    <footer class=\"colophon\">Переведено автоматически из оригинальной рассылки The Rundown AI</footer>\n  </main>\n</body>\n</html>`;\n\nconst buffer = Buffer.from(fullHtml, 'utf8');\nconst binaryData = await this.helpers.prepareBinaryData(buffer, 'newsletter-ru.html', 'text/html');\n\nreturn {\n  json: {\n    htmlDocument: fullHtml,\n  },\n  binary: {\n    data: binaryData,\n  },\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
-        -192
+        1440,
+        0
       ],
-      "id": "27437750-7c94-48b4-91b8-5827313d29dc",
+      "id": "0ea8b666-cb8c-4171-b109-8087b1ebf859",
       "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const previousData = $('Code in JavaScript').first().json;\nconst urlMap = previousData.urlMap ?? {};\n\nfunction extractText(value) {\n  if (typeof value === 'string') {\n    return value;\n  }\n\n  if (Array.isArray(value)) {\n    return value.map(extractText).join('');\n  }\n\n  if (value && typeof value === 'object') {\n    if (typeof value.text === 'string') {\n      return value.text;\n    }\n\n    if (typeof value.output_text === 'string') {\n      return value.output_text;\n    }\n\n    if (typeof value.content === 'string') {\n      return value.content;\n    }\n\n    if (Array.isArray(value.content)) {\n      return value.content.map(extractText).join('');\n    }\n\n    if (value.message?.content) {\n      return extractText(value.message.content);\n    }\n\n    if (value.choices?.[0]?.message?.content) {\n      return extractText(value.choices[0].message.content);\n    }\n\n    if (value.output) {\n      return extractText(value.output);\n    }\n\n    if (value.data) {\n      return extractText(value.data);\n    }\n  }\n\n  return '';\n}\n\nlet restoredMarkdown = extractText(\n  $json.output ??\n  $json.text ??\n  $json.content ??\n  $json.message?.content ??\n  $json.choices?.[0]?.message?.content ??\n  $json\n);\n\n// Falls Modell trotzdem ```markdown ... ``` zurückgibt, entfernen\nrestoredMarkdown = restoredMarkdown\n  .replace(/^```(?:markdown)?\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\n// URLs aus urlMap zurücksetzen\nfor (const [placeholder, url] of Object.entries(urlMap)) {\n  restoredMarkdown = restoredMarkdown.split(placeholder).join(url);\n}\n\n// Prüfen, ob noch Platzhalter übrig sind\nconst unreplacedPlaceholders = restoredMarkdown.match(/__URL_\\d+__/g) ?? [];\n\nreturn {\n  json: {\n    subject: previousData.subject ?? 'Без темы',\n    from: previousData.from ?? '',\n    translatedMarkdown: restoredMarkdown,\n    urlCount: Object.keys(urlMap).length,\n    unreplacedPlaceholders,\n    charactersAfterTranslation: restoredMarkdown.length,\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        0
+      ],
+      "id": "c0025f8a-042a-4418-aa2d-fb6e6c44b783",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        144,
+        144
+      ],
+      "id": "397b950d-5fc1-4b73-a337-db54a7ce9f2f",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "jB6vBHiOEV5IOdsa",
+          "name": "Gmail account"
+        }
+      }
     }
   ],
-  "pinData": {},
   "connections": {
     "Email Trigger (IMAP)": {
       "main": [
@@ -251,18 +276,7 @@
       "main": [
         [
           {
-            "node": "Markdown1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Convert to File": {
-      "main": [
-        [
-          {
-            "node": "Send a document",
+            "node": "Code in JavaScript2",
             "type": "main",
             "index": 0
           }
@@ -284,7 +298,18 @@
       "main": [
         [
           {
-            "node": "Convert to File",
+            "node": "Send a document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Markdown1",
             "type": "main",
             "index": 0
           }
@@ -292,16 +317,16 @@
       ]
     }
   },
+  "pinData": {},
   "active": true,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "ab38bd84-f3d8-48ca-9e24-f4d5ceb5214f",
+  "versionId": "072212c3-9397-4f1c-a97a-872228c7ff99",
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "dd61f8e4fa542f65c128d854395d316ce491e70f4d307a0e28ac55619cbc3ff2"
+    "templateCredsSetupCompleted": true
   },
-  "id": "N0kfKnpkpmEywNko",
+  "id": "tLRjTSvEFqjWpTwk",
   "tags": []
 }
