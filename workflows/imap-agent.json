@@ -60,7 +60,7 @@
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
       "position": [
-        -16,
+        -192,
         0
       ],
       "id": "d43c7923-c9d9-4915-b311-99010ed2996c",
@@ -68,14 +68,14 @@
     },
     {
       "parameters": {
-        "html": "={{ $json.html.replace(/<\\/(p|li|div|h[1-6])>/gi, '</$1>\\n\\n').replace(/<br\\s*\\/?>/gi, '<br>\\n') }}",
+        "html": "={{ $json.html.replace(/<li([^>]*)>/gi, '<li$1>@@LI@@').replace(/<p([^>]*)>/gi, '<p$1>@@P@@').replace(/<br\\s*\\/?>/gi, '<br>@@BR@@') }}",
         "destinationKey": "markdown",
         "options": {}
       },
       "type": "n8n-nodes-base.markdown",
       "typeVersion": 1,
       "position": [
-        192,
+        144,
         0
       ],
       "id": "d9a654d6-e5cf-4794-a47b-cdc893fed8b5",
@@ -84,12 +84,12 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const source = $json.markdown ?? '';\n\nconst urlMap = {};\nlet urlCounter = 0;\n\nfunction createUrlPlaceholder(url) {\n  urlCounter++;\n  const placeholder = `__URL_${urlCounter}__`;\n  urlMap[placeholder] = url;\n  return placeholder;\n}\n\nfunction isHugeMarkdownSeparatorLine(line) {\n  const trimmed = line.trim();\n\n  if (!trimmed) return false;\n\n  // Удаляем пробелы, пайпы и двоеточия.\n  // Если после этого остались только дефисы — это Markdown separator.\n  const withoutTableChars = trimmed.replace(/[|\\s:]/g, '');\n\n  return (\n    trimmed.length > 80 &&\n    /^-+$/.test(withoutTableChars)\n  );\n}\n\nfunction unwrapHugeLayoutTableLine(line) {\n  const trimmed = line.trim();\n\n  // HTML-to-Markdown иногда превращает всю рассылку в одну гигантскую строку таблицы:\n  // | content | content |\n  // Нам это не нужно для перевода, поэтому разворачиваем такую строку в обычный текст.\n  if (\n    trimmed.length > 500 &&\n    trimmed.startsWith('|') &&\n    trimmed.endsWith('|') &&\n    !isHugeMarkdownSeparatorLine(trimmed)\n  ) {\n    return trimmed\n      .replace(/^\\|\\s*/, '')\n      .replace(/\\s*\\|$/, '')\n      // Заменяем реальные разделители ячеек на абзацы.\n      // Экранированные \\| не трогаем.\n      .replace(/([^\\\\])\\s+\\|\\s+/g, '$1\\n\\n');\n  }\n\n  return line;\n}\n\nconst cleaned = source\n  // Удаляем изображения, но сохраняем текстовые ссылки\n  .replace(/!\\[[^\\]]*]\\([^)]+\\)/g, '')\n\n  // Убираем дополнительный Outlook SafeLink из title:\n  // [text](main-url \"duplicate-url\") → [text](main-url)\n  .replace(\n    /\\[([^\\]]*)\\]\\((https?:\\/\\/[^\\s)]+)\\s+\"[^\"]*\"\\)/g,\n    '[$1]($2)'\n  )\n\n  // Заменяем URL внутри Markdown-ссылок на плейсхолдеры\n  .replace(\n    /\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g,\n    (_match, linkText, url) => {\n      const placeholder = createUrlPlaceholder(url);\n      return `[${linkText}](${placeholder})`;\n    }\n  )\n\n  // Удаляем пустые ссылки без текста\n  .replace(/\\[\\s*]\\([^)]+\\)/g, '')\n\n  // Построчная очистка\n  .split('\\n')\n  .map(unwrapHugeLayoutTableLine)\n  .filter(line => !isHugeMarkdownSeparatorLine(line))\n  .join('\\n')\n\n  // Удаляем пустые Markdown-заголовки\n  .replace(/^\\s*#{1,6}\\s*$/gm, '')\n\n  // Убираем подпись пересланного/отправленного письма, если она есть\n  .replace(/\\n---\\s*\\n\\\\--[\\s\\S]*$/m, '')\n\n  // Схлопываем длинные цепочки дефисо-подобных символов (обычно это след\n  // закрашенного/отредактированного текста в оригинале), иначе они ломают\n  // вёрстку на мобильных как один нераздельный кусок\n  .replace(/[-\\u2011\\u2013\\u2014_]{4,}/g, '…')\n\n  // Убираем пробелы в конце строк\n  .replace(/[ \\t]+$/gm, '')\n\n  // Ограничиваем количество пустых строк\n  .replace(/\\n{4,}/g, '\\n\\n\\n')\n\n  .trim();\n\nconst trigger = $json;\n\nreturn {\n  json: {\n    subject: trigger.subject ?? 'Без темы',\n    from: trigger.from?.text ?? trigger.from ?? '',\n    cleanedMarkdown: cleaned,\n    urlMap,\n    urlCount: Object.keys(urlMap).length,\n    charactersBefore: source.length,\n    charactersAfter: cleaned.length,\n    approxTokensBefore: Math.ceil(source.length / 4),\n    approxTokensAfter: Math.ceil(cleaned.length / 4),\n  },\n};"
+        "jsCode": "const source = ($json.markdown ?? '')\n  .replace(/\\s*@@P@@\\s*/g, '\\n\\n')\n  .replace(/\\s*@@LI@@\\s*/g, '\\n\\n- ')\n  .replace(/\\s*@@BR@@\\s*/g, '\\n');\n\nconst urlMap = {};\nlet urlCounter = 0;\n\nfunction createUrlPlaceholder(url) {\n  urlCounter++;\n  const placeholder = `__URL_${urlCounter}__`;\n  urlMap[placeholder] = url;\n  return placeholder;\n}\n\nfunction isHugeMarkdownSeparatorLine(line) {\n  const trimmed = line.trim();\n\n  if (!trimmed) return false;\n\n  // Удаляем пробелы, пайпы и двоеточия.\n  // Если после этого остались только дефисы — это Markdown separator.\n  const withoutTableChars = trimmed.replace(/[|\\s:]/g, '');\n\n  return (\n    trimmed.length > 80 &&\n    /^-+$/.test(withoutTableChars)\n  );\n}\n\nfunction unwrapHugeLayoutTableLine(line) {\n  const trimmed = line.trim();\n\n  // HTML-to-Markdown иногда превращает всю рассылку в одну гигантскую строку таблицы:\n  // | content | content |\n  // Нам это не нужно для перевода, поэтому разворачиваем такую строку в обычный текст.\n  if (\n    trimmed.length > 500 &&\n    trimmed.startsWith('|') &&\n    trimmed.endsWith('|') &&\n    !isHugeMarkdownSeparatorLine(trimmed)\n  ) {\n    return trimmed\n      .replace(/^\\|\\s*/, '')\n      .replace(/\\s*\\|$/, '')\n      // Заменяем реальные разделители ячеек на абзацы.\n      // Экранированные \\| не трогаем.\n      .replace(/([^\\\\])\\s+\\|\\s+/g, '$1\\n\\n');\n  }\n\n  return line;\n}\n\nconst cleaned = source\n  // Удаляем изображения, но сохраняем текстовые ссылки\n  .replace(/!\\[[^\\]]*]\\([^)]+\\)/g, '')\n\n  // Убираем дополнительный Outlook SafeLink из title:\n  // [text](main-url \"duplicate-url\") → [text](main-url)\n  .replace(\n    /\\[([^\\]]*)\\]\\((https?:\\/\\/[^\\s)]+)\\s+\"[^\"]*\"\\)/g,\n    '[$1]($2)'\n  )\n\n  // Заменяем URL внутри Markdown-ссылок на плейсхолдеры\n  .replace(\n    /\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g,\n    (_match, linkText, url) => {\n      const placeholder = createUrlPlaceholder(url);\n      return `[${linkText}](${placeholder})`;\n    }\n  )\n\n  // Удаляем пустые ссылки без текста\n  .replace(/\\[\\s*]\\([^)]+\\)/g, '')\n\n  // Построчная очистка\n  .split('\\n')\n  .map(unwrapHugeLayoutTableLine)\n  .filter(line => !isHugeMarkdownSeparatorLine(line))\n  .join('\\n')\n\n  // Удаляем пустые Markdown-заголовки\n  .replace(/^\\s*#{1,6}\\s*$/gm, '')\n\n  // Убираем подпись пересланного/отправленного письма, если она есть\n  .replace(/\\n---\\s*\\n\\\\--[\\s\\S]*$/m, '')\n\n  // Схлопываем длинные цепочки дефисо-подобных символов (обычно это след\n  // закрашенного/отредактированного текста в оригинале), иначе они ломают\n  // вёрстку на мобильных как один нераздельный кусок\n  .replace(/[-\\u2011\\u2013\\u2014_]{4,}/g, '…')\n\n  // Убираем пробелы в конце строк\n  .replace(/[ \\t]+$/gm, '')\n\n  // Ограничиваем количество пустых строк\n  .replace(/\\n{4,}/g, '\\n\\n\\n')\n\n  .trim();\n\nconst trigger = $json;\n\nreturn {\n  json: {\n    subject: trigger.subject ?? 'Без темы',\n    from: trigger.from?.text ?? trigger.from ?? '',\n    cleanedMarkdown: cleaned,\n    urlMap,\n    urlCount: Object.keys(urlMap).length,\n    charactersBefore: source.length,\n    charactersAfter: cleaned.length,\n    approxTokensBefore: Math.ceil(source.length / 4),\n    approxTokensAfter: Math.ceil(cleaned.length / 4),\n  },\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        352,
+        320,
         0
       ],
       "id": "beda1de5-cd9d-466e-a09f-007e327054cb",
@@ -106,7 +106,7 @@
         "responses": {
           "values": [
             {
-              "content": "=Translate the following English email newsletter into natural, professional Russian.\n\nRequirements:\n- Translate completely and accurately. Do not summarize, omit, add, or invent information.\n- Write like a native Russian tech/news editor, not like a literal machine translation.\n- Preserve the original Markdown structure exactly: headings, paragraphs, lists, list items, links, emojis, bold, italic, and line breaks.\n- Never merge separate paragraphs or list items.\n- Preserve placeholders like __URL_1__ unchanged.\n- In Markdown links, translate only the visible text; preserve the URL unchanged.\n- Keep company, product, model, service, and person names unchanged.\n- Translate official job titles naturally and accurately.\n- Translate idioms, metaphors, slang, and wordplay by meaning, not word-for-word. If no natural Russian equivalent exists, use clear natural Russian instead of a calque.\n- Prefer established Russian tech terminology, e.g. \"world model\" -> \"модель мира\", \"domain expertise\" -> \"предметная экспертиза\".\n- Translate \"AI\" as \"ИИ\" when referring to the technology; use context-appropriate terms such as \"ИИ-индустрия\", \"ИИ-компании\", or \"ИИ-сообщество\" when needed.\n- Do not use a code block.\n- Return only the finished Russian translation.\n\nFixed terms:\n\"The Rundown:\" -> \"Обзор:\" only when used as a section label (e.g. \"The Rundown:\", \"In today's AI rundown:\"). Otherwise, when \"The Rundown\" refers to the newsletter/publication itself (e.g. a byline, credit, or \"the humans behind The Rundown\"), keep it unchanged as \"The Rundown\".\n\"The details:\" = \"Подробности:\"\n\"Why it matters:\" = \"Почему это важно:\"\n\"Step-by-step:\" = \"Пошагово:\"\n\"Presented by\" = \"При поддержке\"\n\"Together with\" = \"Совместно с\"\n\"Quick Hits\" = \"Коротко\"\n\"Going further:\" = \"Если хотите больше:\"\n\"Image source:\" = \"Источник изображения:\"\n\nEMAIL:\n{{ $json.cleanedMarkdown }}\n"
+              "content": "=Translate the following English email newsletter into natural, professional Russian.\n\nRequirements:\n- Translate completely and accurately. Do not summarize, omit, add, or invent information.\n- Never infer or insert company/product names that are not present in the source sentence.\n- Write like a native Russian tech/news editor, not like a literal machine translation.\n- Preserve the original Markdown structure exactly: headings, paragraphs, lists, list items, links, emojis, bold, italic, and line breaks.\n- Never merge separate paragraphs or list items.\n- Preserve placeholders like __URL_1__ unchanged.\n- Translate all editorial section labels and visible link text, unless they are brand/product names; preserve URLs unchanged.\n- Keep company, product, model, service, and person names unchanged. Translate official job titles naturally and accurately.\n- Translate idioms, metaphors, slang, and wordplay by meaning, not word-for-word. If no natural Russian equivalent exists, use clear natural Russian instead of a calque.\n- Avoid Russian calques and unnecessary English jargon when a standard Russian equivalent exists. Prefer established Russian tech terminology, e.g. \"world model\" -> \"модель мира\", \"domain expertise\" -> \"предметная экспертиза\".\n- After translating each sentence, mentally check: would a native Russian tech journalist actually phrase it this way? Rewrite if not.\n- Translate \"AI\" as \"ИИ\" when referring to the technology; use context-appropriate terms such as \"ИИ-индустрия\", \"ИИ-компании\", or \"ИИ-сообщество\" when needed.\n- Do not use a code block.\n- Return only the finished Russian translation.\n\nFixed terms:\n\"The Rundown:\" -> \"Обзор:\" only when used as a section label (e.g. \"The Rundown:\", \"In today's AI rundown:\"). Otherwise, when \"The Rundown\" refers to the newsletter/publication itself (e.g. a byline, credit, or \"the humans behind The Rundown\"), keep it unchanged as \"The Rundown\".\n\"The details:\" = \"Подробности:\"\n\"Why it matters:\" = \"Почему это важно:\"\n\"Step-by-step:\" = \"Пошагово:\"\n\"Presented by\" = \"При поддержке\"\n\"Together with\" = \"Совместно с\"\n\"Quick Hits\" = \"Коротко\"\n\"Going further:\" = \"Если хотите больше:\"\n\"Image source:\" = \"Источник изображения:\"\n\nEMAIL:\n{{ $json.cleanedMarkdown }}\n"
             }
           ]
         },
@@ -122,7 +122,7 @@
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 2.1,
       "position": [
-        544,
+        624,
         0
       ],
       "id": "b1b06c24-908f-4ba6-9e15-8eea9506e180",
@@ -146,7 +146,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1840,
+        1760,
         0
       ],
       "id": "18695e91-1574-4c27-ac6c-203ca3f96366",
@@ -169,7 +169,7 @@
       "type": "n8n-nodes-base.markdown",
       "typeVersion": 1,
       "position": [
-        1248,
+        1232,
         0
       ],
       "id": "110f5079-5f3e-480d-8109-22532ced96cb",
@@ -183,7 +183,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1440,
+        1392,
         0
       ],
       "id": "0ea8b666-cb8c-4171-b109-8087b1ebf859",
@@ -197,7 +197,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        944,
+        1072,
         0
       ],
       "id": "c0025f8a-042a-4418-aa2d-fb6e6c44b783",
@@ -219,8 +219,8 @@
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1.4,
       "position": [
-        -224,
-        -176
+        -352,
+        0
       ],
       "id": "397b950d-5fc1-4b73-a337-db54a7ce9f2f",
       "name": "Gmail Trigger",
@@ -332,7 +332,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "7f013b59-d3be-438e-8ed4-02f37a9b167e",
+  "versionId": "f6015b62-6749-4640-9256-7e80c392781f",
   "meta": null,
   "id": "Q0dPkLoBsZ8UYUGS",
   "tags": []
