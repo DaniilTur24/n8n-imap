@@ -12,8 +12,8 @@
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2.1,
       "position": [
-        -272,
-        96
+        -288,
+        192
       ],
       "id": "f5ede585-39db-4865-bde7-8e3b6c67edee",
       "name": "Email Trigger (IMAP)",
@@ -68,7 +68,7 @@
     },
     {
       "parameters": {
-        "html": "={{ $json.html }}",
+        "html": "={{ $json.html.replace(/<\\/(p|li|div|h[1-6])>/gi, '</$1>\\n\\n').replace(/<br\\s*\\/?>/gi, '<br>\\n') }}",
         "destinationKey": "markdown",
         "options": {}
       },
@@ -106,23 +106,18 @@
         "responses": {
           "values": [
             {
-              "content": "=Translate the following email newsletter from English to Russian accurately, completely, and naturally — the way a skilled human translator would, not a literal machine translation.\n\nImportant:\n- Preserve the full meaning and all factual details.\n- Do not summarize, shorten, omit, or add anything.\n- Preserve Markdown structure, paragraphs, headings, lists, emojis, bold and italic.\n- Preserve placeholders like __URL_1__ unchanged.\n- In Markdown links, translate only the visible link text.\n- Do not use a code block.\n- Return only the finished Russian translation.\n\nHow to handle idioms and English expressions (this matters most):\n- English text is full of idioms, metaphors, wordplay, and casual expressions (\"hits close to home\", \"game changer\", \"under the hood\", \"in the driver's seat\", \"where there's smoke, there's fire\"). Never translate these word-for-word — a literal translation is usually confusing or meaningless in Russian.\n- First figure out what the phrase actually MEANS or what tone it conveys, then express that meaning in natural Russian — using an equivalent Russian idiom if one exists, or plain, fluent Russian if it doesn't.\n- Examples:\n  - \"This hits close to home for everyone\" → \"Это касается каждого из нас\" (not a literal calque).\n  - \"Where there is smoke, there is fire\" → \"Дыма без огня не бывает\" (use the existing Russian proverb, don't invent a literal one).\n  - \"X is a game changer\" → \"X всё меняет\" / \"X переворачивает правила игры\" — pick whichever reads more naturally in context, not a stiff calque.\n  - Puns or wordplay tied to a specific word (e.g. a chip named after a hot pepper, described as \"spicy\") — keep the pun only if a natural Russian equivalent exists; otherwise drop the wordplay and just convey the meaning clearly rather than forcing an awkward calque.\n- When in doubt, prioritize a sentence a native Russian speaker would actually write over one that mirrors the English sentence structure.\n\nStyle:\n- Russian should sound like a professional tech/news newsletter, written by a native speaker — not translated.\n- Prefer clear, natural journalistic Russian over stiff, formal, or calque-heavy phrasing.\n- Keep company, product, service, model and person names unchanged.\n- Translate “AI” as “ИИ” when it means the technology. If “AI” refers to the AI industry, AI companies, AI leaders, or AI community, translate contextually, e.g. “ИИ-индустрия”, “представители ИИ-индустрии”, “ИИ-компании”.\n\nFixed terms:\n\"The Rundown:\" = \"Обзор:\"\n\"The details:\" = \"Подробности:\"\n\"Why it matters:\" = \"Почему это важно:\"\n\"Step-by-step:\" = \"Пошагово:\"\n\"Presented by\" = \"При поддержке\"\n\"Together with\" = \"Совместно с\"\n\"Quick Hits\" = \"Коротко\"\n\"Going further:\" = \"Если хотите больше:\"\n\"Image source:\" = \"Источник изображения:\"\n\nEMAIL:\n{{ $json.cleanedMarkdown }}\n"
+              "content": "=Translate the following English email newsletter into natural, professional Russian.\n\nRequirements:\n- Translate completely and accurately. Do not summarize, omit, add, or invent information.\n- Write like a native Russian tech/news editor, not like a literal machine translation.\n- Preserve the original Markdown structure exactly: headings, paragraphs, lists, list items, links, emojis, bold, italic, and line breaks.\n- Never merge separate paragraphs or list items.\n- Preserve placeholders like __URL_1__ unchanged.\n- In Markdown links, translate only the visible text; preserve the URL unchanged.\n- Keep company, product, model, service, and person names unchanged.\n- Translate official job titles naturally and accurately.\n- Translate idioms, metaphors, slang, and wordplay by meaning, not word-for-word. If no natural Russian equivalent exists, use clear natural Russian instead of a calque.\n- Prefer established Russian tech terminology, e.g. \"world model\" -> \"модель мира\", \"domain expertise\" -> \"предметная экспертиза\".\n- Translate \"AI\" as \"ИИ\" when referring to the technology; use context-appropriate terms such as \"ИИ-индустрия\", \"ИИ-компании\", or \"ИИ-сообщество\" when needed.\n- Do not use a code block.\n- Return only the finished Russian translation.\n\nFixed terms:\n\"The Rundown:\" -> \"Обзор:\" only when used as a section label (e.g. \"The Rundown:\", \"In today's AI rundown:\"). Otherwise, when \"The Rundown\" refers to the newsletter/publication itself (e.g. a byline, credit, or \"the humans behind The Rundown\"), keep it unchanged as \"The Rundown\".\n\"The details:\" = \"Подробности:\"\n\"Why it matters:\" = \"Почему это важно:\"\n\"Step-by-step:\" = \"Пошагово:\"\n\"Presented by\" = \"При поддержке\"\n\"Together with\" = \"Совместно с\"\n\"Quick Hits\" = \"Коротко\"\n\"Going further:\" = \"Если хотите больше:\"\n\"Image source:\" = \"Источник изображения:\"\n\nEMAIL:\n{{ $json.cleanedMarkdown }}\n"
             }
           ]
         },
+        "simplify": false,
         "builtInTools": {},
         "options": {
           "maxTokens": 12000,
           "reasoning": {
-            "reasoningOptions": [
-              {
-                "effort": "low",
-                "summary": "none"
-              }
-            ]
+            "reasoningOptions": {}
           }
-        },
-        "simplify": false
+        }
       },
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 2.1,
@@ -217,8 +212,9 @@
             }
           ]
         },
+        "simple": false,
         "filters": {},
-        "simple": false
+        "options": {}
       },
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1.4,
@@ -336,7 +332,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "3a117f4f-929d-4ef6-903a-570e5d33e542",
+  "versionId": "7f013b59-d3be-438e-8ed4-02f37a9b167e",
   "meta": null,
   "id": "Q0dPkLoBsZ8UYUGS",
   "tags": []
