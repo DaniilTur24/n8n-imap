@@ -12,8 +12,8 @@
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2.1,
       "position": [
-        -224,
-        0
+        -272,
+        96
       ],
       "id": "f5ede585-39db-4865-bde7-8e3b6c67edee",
       "name": "Email Trigger (IMAP)",
@@ -36,7 +36,7 @@
           "conditions": [
             {
               "id": "ca3d34be-3345-423a-8e3a-5f448b71d4c7",
-              "leftValue": "={{ $json.from }}",
+              "leftValue": "={{ $json.from?.text }}",
               "rightValue": "therundown.ai",
               "operator": {
                 "type": "string",
@@ -45,7 +45,7 @@
             },
             {
               "id": "28a9ff5c-2da2-4423-8744-38aa4ae7d2fa",
-              "leftValue": "={{ $json.from }}",
+              "leftValue": "={{ $json.from?.text }}",
               "rightValue": "klartxt.de",
               "operator": {
                 "type": "string",
@@ -68,7 +68,7 @@
     },
     {
       "parameters": {
-        "html": "={{ $json.textHtml }}",
+        "html": "={{ $json.html }}",
         "destinationKey": "markdown",
         "options": {}
       },
@@ -84,7 +84,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const source = $json.markdown ?? '';\n\nconst urlMap = {};\nlet urlCounter = 0;\n\nfunction createUrlPlaceholder(url) {\n  urlCounter++;\n  const placeholder = `__URL_${urlCounter}__`;\n  urlMap[placeholder] = url;\n  return placeholder;\n}\n\nfunction isHugeMarkdownSeparatorLine(line) {\n  const trimmed = line.trim();\n\n  if (!trimmed) return false;\n\n  // Удаляем пробелы, пайпы и двоеточия.\n  // Если после этого остались только дефисы — это Markdown separator.\n  const withoutTableChars = trimmed.replace(/[|\\s:]/g, '');\n\n  return (\n    trimmed.length > 80 &&\n    /^-+$/.test(withoutTableChars)\n  );\n}\n\nfunction unwrapHugeLayoutTableLine(line) {\n  const trimmed = line.trim();\n\n  // HTML-to-Markdown иногда превращает всю рассылку в одну гигантскую строку таблицы:\n  // | content | content |\n  // Нам это не нужно для перевода, поэтому разворачиваем такую строку в обычный текст.\n  if (\n    trimmed.length > 500 &&\n    trimmed.startsWith('|') &&\n    trimmed.endsWith('|') &&\n    !isHugeMarkdownSeparatorLine(trimmed)\n  ) {\n    return trimmed\n      .replace(/^\\|\\s*/, '')\n      .replace(/\\s*\\|$/, '')\n      // Заменяем реальные разделители ячеек на абзацы.\n      // Экранированные \\| не трогаем.\n      .replace(/([^\\\\])\\s+\\|\\s+/g, '$1\\n\\n');\n  }\n\n  return line;\n}\n\nconst cleaned = source\n  // Удаляем изображения, но сохраняем текстовые ссылки\n  .replace(/!\\[[^\\]]*]\\([^)]+\\)/g, '')\n\n  // Убираем дополнительный Outlook SafeLink из title:\n  // [text](main-url \"duplicate-url\") → [text](main-url)\n  .replace(\n    /\\[([^\\]]*)\\]\\((https?:\\/\\/[^\\s)]+)\\s+\"[^\"]*\"\\)/g,\n    '[$1]($2)'\n  )\n\n  // Заменяем URL внутри Markdown-ссылок на плейсхолдеры\n  .replace(\n    /\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g,\n    (_match, linkText, url) => {\n      const placeholder = createUrlPlaceholder(url);\n      return `[${linkText}](${placeholder})`;\n    }\n  )\n\n  // Удаляем пустые ссылки без текста\n  .replace(/\\[\\s*]\\([^)]+\\)/g, '')\n\n  // Построчная очистка\n  .split('\\n')\n  .map(unwrapHugeLayoutTableLine)\n  .filter(line => !isHugeMarkdownSeparatorLine(line))\n  .join('\\n')\n\n  // Удаляем пустые Markdown-заголовки\n  .replace(/^\\s*#{1,6}\\s*$/gm, '')\n\n  // Убираем подпись пересланного/отправленного письма, если она есть\n  .replace(/\\n---\\s*\\n\\\\--[\\s\\S]*$/m, '')\n\n  // Схлопываем длинные цепочки дефисо-подобных символов (обычно это след\n  // закрашенного/отредактированного текста в оригинале), иначе они ломают\n  // вёрстку на мобильных как один нераздельный кусок\n  .replace(/[-\\u2011\\u2013\\u2014_]{4,}/g, '…')\n\n  // Убираем пробелы в конце строк\n  .replace(/[ \\t]+$/gm, '')\n\n  // Ограничиваем количество пустых строк\n  .replace(/\\n{4,}/g, '\\n\\n\\n')\n\n  .trim();\n\nconst trigger = $json;\n\nreturn {\n  json: {\n    subject: trigger.subject ?? 'Без темы',\n    from: trigger.from ?? '',\n    cleanedMarkdown: cleaned,\n    urlMap,\n    urlCount: Object.keys(urlMap).length,\n    charactersBefore: source.length,\n    charactersAfter: cleaned.length,\n    approxTokensBefore: Math.ceil(source.length / 4),\n    approxTokensAfter: Math.ceil(cleaned.length / 4),\n  },\n};"
+        "jsCode": "const source = $json.markdown ?? '';\n\nconst urlMap = {};\nlet urlCounter = 0;\n\nfunction createUrlPlaceholder(url) {\n  urlCounter++;\n  const placeholder = `__URL_${urlCounter}__`;\n  urlMap[placeholder] = url;\n  return placeholder;\n}\n\nfunction isHugeMarkdownSeparatorLine(line) {\n  const trimmed = line.trim();\n\n  if (!trimmed) return false;\n\n  // Удаляем пробелы, пайпы и двоеточия.\n  // Если после этого остались только дефисы — это Markdown separator.\n  const withoutTableChars = trimmed.replace(/[|\\s:]/g, '');\n\n  return (\n    trimmed.length > 80 &&\n    /^-+$/.test(withoutTableChars)\n  );\n}\n\nfunction unwrapHugeLayoutTableLine(line) {\n  const trimmed = line.trim();\n\n  // HTML-to-Markdown иногда превращает всю рассылку в одну гигантскую строку таблицы:\n  // | content | content |\n  // Нам это не нужно для перевода, поэтому разворачиваем такую строку в обычный текст.\n  if (\n    trimmed.length > 500 &&\n    trimmed.startsWith('|') &&\n    trimmed.endsWith('|') &&\n    !isHugeMarkdownSeparatorLine(trimmed)\n  ) {\n    return trimmed\n      .replace(/^\\|\\s*/, '')\n      .replace(/\\s*\\|$/, '')\n      // Заменяем реальные разделители ячеек на абзацы.\n      // Экранированные \\| не трогаем.\n      .replace(/([^\\\\])\\s+\\|\\s+/g, '$1\\n\\n');\n  }\n\n  return line;\n}\n\nconst cleaned = source\n  // Удаляем изображения, но сохраняем текстовые ссылки\n  .replace(/!\\[[^\\]]*]\\([^)]+\\)/g, '')\n\n  // Убираем дополнительный Outlook SafeLink из title:\n  // [text](main-url \"duplicate-url\") → [text](main-url)\n  .replace(\n    /\\[([^\\]]*)\\]\\((https?:\\/\\/[^\\s)]+)\\s+\"[^\"]*\"\\)/g,\n    '[$1]($2)'\n  )\n\n  // Заменяем URL внутри Markdown-ссылок на плейсхолдеры\n  .replace(\n    /\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g,\n    (_match, linkText, url) => {\n      const placeholder = createUrlPlaceholder(url);\n      return `[${linkText}](${placeholder})`;\n    }\n  )\n\n  // Удаляем пустые ссылки без текста\n  .replace(/\\[\\s*]\\([^)]+\\)/g, '')\n\n  // Построчная очистка\n  .split('\\n')\n  .map(unwrapHugeLayoutTableLine)\n  .filter(line => !isHugeMarkdownSeparatorLine(line))\n  .join('\\n')\n\n  // Удаляем пустые Markdown-заголовки\n  .replace(/^\\s*#{1,6}\\s*$/gm, '')\n\n  // Убираем подпись пересланного/отправленного письма, если она есть\n  .replace(/\\n---\\s*\\n\\\\--[\\s\\S]*$/m, '')\n\n  // Схлопываем длинные цепочки дефисо-подобных символов (обычно это след\n  // закрашенного/отредактированного текста в оригинале), иначе они ломают\n  // вёрстку на мобильных как один нераздельный кусок\n  .replace(/[-\\u2011\\u2013\\u2014_]{4,}/g, '…')\n\n  // Убираем пробелы в конце строк\n  .replace(/[ \\t]+$/gm, '')\n\n  // Ограничиваем количество пустых строк\n  .replace(/\\n{4,}/g, '\\n\\n\\n')\n\n  .trim();\n\nconst trigger = $json;\n\nreturn {\n  json: {\n    subject: trigger.subject ?? 'Без темы',\n    from: trigger.from?.text ?? trigger.from ?? '',\n    cleanedMarkdown: cleaned,\n    urlMap,\n    urlCount: Object.keys(urlMap).length,\n    charactersBefore: source.length,\n    charactersAfter: cleaned.length,\n    approxTokensBefore: Math.ceil(source.length / 4),\n    approxTokensAfter: Math.ceil(cleaned.length / 4),\n  },\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -112,8 +112,17 @@
         },
         "builtInTools": {},
         "options": {
-          "maxTokens": 12000
-        }
+          "maxTokens": 12000,
+          "reasoning": {
+            "reasoningOptions": [
+              {
+                "effort": "low",
+                "summary": "none"
+              }
+            ]
+          }
+        },
+        "simplify": false
       },
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 2.1,
@@ -208,7 +217,8 @@
             }
           ]
         },
-        "filters": {}
+        "filters": {},
+        "simple": false
       },
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1.4,
@@ -218,20 +228,18 @@
       ],
       "id": "397b950d-5fc1-4b73-a337-db54a7ce9f2f",
       "name": "Gmail Trigger",
-      "disabled": true,
-      "credentials": {}
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "wHZaEFCgQcvj2nck",
+          "name": "Gmail account"
+        }
+      }
     }
   ],
   "connections": {
     "Email Trigger (IMAP)": {
       "main": [
-        [
-          {
-            "node": "Filter",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Filter": {
@@ -326,10 +334,9 @@
   "pinData": {},
   "active": true,
   "settings": {
-    "executionOrder": "v1",
-    "binaryMode": "separate"
+    "executionOrder": "v1"
   },
-  "versionId": "158413e9-3cd1-422f-af19-9460a1064e5e",
+  "versionId": "3a117f4f-929d-4ef6-903a-570e5d33e542",
   "meta": null,
   "id": "Q0dPkLoBsZ8UYUGS",
   "tags": []
