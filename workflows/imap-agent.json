@@ -11,10 +11,7 @@
       },
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2.1,
-      "position": [
-        -288,
-        192
-      ],
+      "position": [-288, 192],
       "id": "f5ede585-39db-4865-bde7-8e3b6c67edee",
       "name": "Email Trigger (IMAP)",
       "credentials": {
@@ -51,6 +48,15 @@
                 "type": "string",
                 "operation": "contains"
               }
+            },
+            {
+              "id": "f7d7f72a-77e0-4e6b-a313-72bed2754951",
+              "leftValue": "={{ $json.from?.text }}",
+              "rightValue": "simple.ai",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
             }
           ],
           "combinator": "or"
@@ -59,10 +65,7 @@
       },
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.3,
-      "position": [
-        -192,
-        0
-      ],
+      "position": [-192, 0],
       "id": "d43c7923-c9d9-4915-b311-99010ed2996c",
       "name": "Filter"
     },
@@ -74,24 +77,18 @@
       },
       "type": "n8n-nodes-base.markdown",
       "typeVersion": 1,
-      "position": [
-        144,
-        0
-      ],
+      "position": [144, 0],
       "id": "d9a654d6-e5cf-4794-a47b-cdc893fed8b5",
       "name": "Markdown"
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const source = ($json.markdown ?? '')\n  .replace(/\\s*@@P@@\\s*/g, '\\n\\n')\n  .replace(/\\s*@@LI@@\\s*/g, '\\n\\n- ')\n  .replace(/\\s*@@BR@@\\s*/g, '\\n');\n\nconst urlMap = {};\nlet urlCounter = 0;\n\nfunction createUrlPlaceholder(url) {\n  urlCounter++;\n  const placeholder = `__URL_${urlCounter}__`;\n  urlMap[placeholder] = url;\n  return placeholder;\n}\n\nfunction isHugeMarkdownSeparatorLine(line) {\n  const trimmed = line.trim();\n\n  if (!trimmed) return false;\n\n  // Удаляем пробелы, пайпы и двоеточия.\n  // Если после этого остались только дефисы — это Markdown separator.\n  const withoutTableChars = trimmed.replace(/[|\\s:]/g, '');\n\n  return (\n    trimmed.length > 80 &&\n    /^-+$/.test(withoutTableChars)\n  );\n}\n\nfunction unwrapHugeLayoutTableLine(line) {\n  const trimmed = line.trim();\n\n  // HTML-to-Markdown иногда превращает всю рассылку в одну гигантскую строку таблицы:\n  // | content | content |\n  // Нам это не нужно для перевода, поэтому разворачиваем такую строку в обычный текст.\n  if (\n    trimmed.length > 500 &&\n    trimmed.startsWith('|') &&\n    trimmed.endsWith('|') &&\n    !isHugeMarkdownSeparatorLine(trimmed)\n  ) {\n    return trimmed\n      .replace(/^\\|\\s*/, '')\n      .replace(/\\s*\\|$/, '')\n      // Заменяем реальные разделители ячеек на абзацы.\n      // Экранированные \\| не трогаем.\n      .replace(/([^\\\\])\\s+\\|\\s+/g, '$1\\n\\n');\n  }\n\n  return line;\n}\n\nconst cleaned = source\n  // Удаляем изображения, но сохраняем текстовые ссылки\n  .replace(/!\\[[^\\]]*]\\([^)]+\\)/g, '')\n\n  // Убираем дополнительный Outlook SafeLink из title:\n  // [text](main-url \"duplicate-url\") → [text](main-url)\n  .replace(\n    /\\[([^\\]]*)\\]\\((https?:\\/\\/[^\\s)]+)\\s+\"[^\"]*\"\\)/g,\n    '[$1]($2)'\n  )\n\n  // Заменяем URL внутри Markdown-ссылок на плейсхолдеры\n  .replace(\n    /\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g,\n    (_match, linkText, url) => {\n      const placeholder = createUrlPlaceholder(url);\n      return `[${linkText}](${placeholder})`;\n    }\n  )\n\n  // Удаляем пустые ссылки без текста\n  .replace(/\\[\\s*]\\([^)]+\\)/g, '')\n\n  // Построчная очистка\n  .split('\\n')\n  .map(unwrapHugeLayoutTableLine)\n  .filter(line => !isHugeMarkdownSeparatorLine(line))\n  .join('\\n')\n\n  // Удаляем пустые Markdown-заголовки\n  .replace(/^\\s*#{1,6}\\s*$/gm, '')\n\n  // Убираем подпись пересланного/отправленного письма, если она есть\n  .replace(/\\n---\\s*\\n\\\\--[\\s\\S]*$/m, '')\n\n  // Схлопываем длинные цепочки дефисо-подобных символов (обычно это след\n  // закрашенного/отредактированного текста в оригинале), иначе они ломают\n  // вёрстку на мобильных как один нераздельный кусок\n  .replace(/[-\\u2011\\u2013\\u2014_]{4,}/g, '…')\n\n  // Убираем пробелы в конце строк\n  .replace(/[ \\t]+$/gm, '')\n\n  // Ограничиваем количество пустых строк\n  .replace(/\\n{4,}/g, '\\n\\n\\n')\n\n  .trim();\n\nconst trigger = $json;\n\nreturn {\n  json: {\n    subject: trigger.subject ?? 'Без темы',\n    from: trigger.from?.text ?? trigger.from ?? '',\n    cleanedMarkdown: cleaned,\n    urlMap,\n    urlCount: Object.keys(urlMap).length,\n    charactersBefore: source.length,\n    charactersAfter: cleaned.length,\n    approxTokensBefore: Math.ceil(source.length / 4),\n    approxTokensAfter: Math.ceil(cleaned.length / 4),\n  },\n};"
+        "jsCode": "const source = ($json.markdown ?? '')\n  .replace(/\\s*@@P@@\\s*/g, '\\n\\n')\n  .replace(/\\s*@@LI@@\\s*/g, '\\n\\n- ')\n  .replace(/\\s*@@BR@@\\s*/g, '\\n');\n\nconst urlMap = {};\nlet urlCounter = 0;\n\nfunction createUrlPlaceholder(url) {\n  urlCounter++;\n  const placeholder = `__URL_${urlCounter}__`;\n  urlMap[placeholder] = url;\n  return placeholder;\n}\n\nfunction isHugeMarkdownSeparatorLine(line) {\n  const trimmed = line.trim();\n\n  if (!trimmed) return false;\n\n  // Удаляем пробелы, пайпы и двоеточия.\n  // Если после этого остались только дефисы — это Markdown separator.\n  const withoutTableChars = trimmed.replace(/[|\\s:]/g, '');\n\n  return (\n    trimmed.length > 80 &&\n    /^-+$/.test(withoutTableChars)\n  );\n}\n\nfunction unwrapHugeLayoutTableLine(line) {\n  const trimmed = line.trim();\n\n  // HTML-to-Markdown иногда превращает всю рассылку в одну гигантскую строку таблицы:\n  // | content | content |\n  // Нам это не нужно для перевода, поэтому разворачиваем такую строку в обычный текст.\n  if (\n    trimmed.length > 500 &&\n    trimmed.startsWith('|') &&\n    trimmed.endsWith('|') &&\n    !isHugeMarkdownSeparatorLine(trimmed)\n  ) {\n    return trimmed\n      .replace(/^\\|\\s*/, '')\n      .replace(/\\s*\\|$/, '')\n      // Заменяем реальные разделители ячеек на абзацы.\n      // Экранированные \\| не трогаем.\n      .replace(/([^\\\\])\\s+\\|\\s+/g, '$1\\n\\n');\n  }\n\n  return line;\n}\n\nconst cleaned = source\n  // Beehiiv скрывает preheader длинными цепочками zero-width символов.\n  .replace(/[\\u200B-\\u200D\\u2060\\uFEFF]/g, '')\n\n  // Удаляем строки, содержащие только остатки табличной вёрстки.\n  .replace(/^\\s*\\|\\s*$/gm, '')\n\n  // Удаляем изображения, но сохраняем текстовые ссылки\n  .replace(/!\\[[^\\]]*]\\([^)]+\\)/g, '')\n\n  // Убираем дополнительный Outlook SafeLink из title:\n  // [text](main-url \"duplicate-url\") → [text](main-url)\n  .replace(\n    /\\[([^\\]]*)\\]\\((https?:\\/\\/[^\\s)]+)\\s+\"[^\"]*\"\\)/g,\n    '[$1]($2)'\n  )\n\n  // Заменяем URL внутри Markdown-ссылок на плейсхолдеры\n  .replace(\n    /\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g,\n    (_match, linkText, url) => {\n      const placeholder = createUrlPlaceholder(url);\n      return `[${linkText}](${placeholder})`;\n    }\n  )\n\n  // Удаляем пустые ссылки без текста\n  .replace(/\\[\\s*]\\([^)]+\\)/g, '')\n\n  // Построчная очистка\n  .split('\\n')\n  .map(unwrapHugeLayoutTableLine)\n  .filter(line => !isHugeMarkdownSeparatorLine(line) && !/^\\s*\\|\\s*$/.test(line))\n  .join('\\n')\n\n  // Удаляем пустые Markdown-заголовки\n  .replace(/^\\s*#{1,6}\\s*$/gm, '')\n\n  // Убираем подпись пересланного/отправленного письма, если она есть\n  .replace(/\\n---\\s*\\n\\\\--[\\s\\S]*$/m, '')\n\n  // Схлопываем длинные цепочки дефисо-подобных символов (обычно это след\n  // закрашенного/отредактированного текста в оригинале), иначе они ломают\n  // вёрстку на мобильных как один нераздельный кусок\n  .replace(/[-\\u2011\\u2013\\u2014_]{4,}/g, '…')\n\n  // Убираем пробелы в конце строк\n  .replace(/[ \\t]+$/gm, '')\n\n  // Ограничиваем количество пустых строк\n  .replace(/\\n{4,}/g, '\\n\\n\\n')\n\n  .trim();\n\nconst trigger = $json;\n\nreturn {\n  json: {\n    subject: trigger.subject ?? 'Без темы',\n    from: trigger.from?.text ?? trigger.from ?? '',\n    cleanedMarkdown: cleaned,\n    urlMap,\n    urlCount: Object.keys(urlMap).length,\n    charactersBefore: source.length,\n    charactersAfter: cleaned.length,\n    approxTokensBefore: Math.ceil(source.length / 4),\n    approxTokensAfter: Math.ceil(cleaned.length / 4),\n  },\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        320,
-        0
-      ],
+      "position": [320, 0],
       "id": "beda1de5-cd9d-466e-a09f-007e327054cb",
       "name": "Code in JavaScript"
     },
@@ -121,10 +118,7 @@
       },
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 2.1,
-      "position": [
-        624,
-        0
-      ],
+      "position": [624, 0],
       "id": "b1b06c24-908f-4ba6-9e15-8eea9506e180",
       "name": "Message a model",
       "credentials": {
@@ -145,10 +139,7 @@
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [
-        1760,
-        0
-      ],
+      "position": [1760, 0],
       "id": "18695e91-1574-4c27-ac6c-203ca3f96366",
       "name": "Send a document",
       "webhookId": "aed96890-a7cc-4125-a0eb-fa07b4f7c296",
@@ -168,38 +159,29 @@
       },
       "type": "n8n-nodes-base.markdown",
       "typeVersion": 1,
-      "position": [
-        1232,
-        0
-      ],
+      "position": [1232, 0],
       "id": "110f5079-5f3e-480d-8109-22532ced96cb",
       "name": "Markdown1"
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const content = $json.html ?? '';\n\nconst dateLabel = new Date().toLocaleDateString('ru-RU', {\n  day: 'numeric',\n  month: 'long',\n  year: 'numeric',\n});\n\nconst fullHtml = `<!doctype html>\n<html lang=\"ru\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>The Rundown AI — Дайджест</title>\n\n  <style>\n    :root {\n      --text: #1a1d21;\n      --muted: #57646b;\n      --rule: #d6dedb;\n      --accent: #1f6f5c;\n      --bg: #ffffff;\n      --surface: #eef1f0;\n      --font-sans: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif;\n      --font-mono: ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace;\n    }\n\n    @media (prefers-color-scheme: dark) {\n      :root {\n        --text: #e7e9ea;\n        --muted: #9aa4a9;\n        --rule: #2a3134;\n        --accent: #4fd8b8;\n        --bg: #14171a;\n        --surface: #0c0e10;\n      }\n    }\n\n    :root[data-theme=\"dark\"] {\n      --text: #e7e9ea;\n      --muted: #9aa4a9;\n      --rule: #2a3134;\n      --accent: #4fd8b8;\n      --bg: #14171a;\n      --surface: #0c0e10;\n    }\n\n    :root[data-theme=\"light\"] {\n      --text: #1a1d21;\n      --muted: #57646b;\n      --rule: #d6dedb;\n      --accent: #1f6f5c;\n      --bg: #ffffff;\n      --surface: #eef1f0;\n    }\n\n    * {\n      box-sizing: border-box;\n    }\n\n    html, body {\n      margin: 0;\n      padding: 0;\n      background: var(--surface);\n    }\n\n    body {\n      font-family: var(--font-sans);\n      color: var(--text);\n      line-height: 1.62;\n      font-size: 16px;\n    }\n\n    .page {\n      max-width: 680px;\n      margin: 0 auto;\n      padding: 48px 56px 64px;\n      background: var(--bg);\n      overflow-wrap: anywhere;\n    }\n\n    .masthead {\n      padding-bottom: 20px;\n      margin-bottom: 32px;\n      border-bottom: 2px solid var(--rule);\n    }\n\n    .masthead .kicker {\n      font-family: var(--font-mono);\n      font-size: 12px;\n      letter-spacing: 0.12em;\n      text-transform: uppercase;\n      color: var(--accent);\n      margin: 0 0 10px;\n    }\n\n    .masthead .title {\n      font-family: var(--font-sans);\n      font-size: 28px;\n      font-weight: 700;\n      margin: 0 0 8px;\n      letter-spacing: -0.01em;\n      text-wrap: balance;\n    }\n\n    .masthead .date {\n      font-family: var(--font-mono);\n      font-size: 13px;\n      color: var(--muted);\n      margin: 0;\n    }\n\n    article h1, article h2, article h3, article h4 {\n      font-family: var(--font-sans);\n      font-weight: 700;\n      color: var(--text);\n      line-height: 1.3;\n      text-wrap: balance;\n    }\n\n    article h1 {\n      font-size: 24px;\n      margin: 1.8em 0 0.6em;\n    }\n\n    article h2 {\n      font-family: var(--font-mono);\n      font-size: 12px;\n      font-weight: 600;\n      color: var(--accent);\n      text-transform: uppercase;\n      letter-spacing: 0.08em;\n      margin: 2.4em 0 0.9em;\n      padding-bottom: 8px;\n      border-bottom: 1px solid var(--rule);\n    }\n\n    article h3 {\n      font-size: 18px;\n      margin: 1.8em 0 0.5em;\n    }\n\n    article h4 {\n      font-size: 16px;\n      margin: 1.6em 0 0.5em;\n    }\n\n    p, li {\n      margin: 0 0 1em;\n    }\n\n    ul, ol {\n      padding-left: 1.3em;\n      margin: 0 0 1.2em;\n    }\n\n    li {\n      margin-bottom: 0.5em;\n    }\n\n    blockquote {\n      margin: 1.5em 0;\n      padding: 2px 0 2px 18px;\n      border-left: 3px solid var(--accent);\n      color: var(--muted);\n    }\n\n    a {\n      color: var(--accent);\n      text-decoration: underline;\n      text-underline-offset: 2px;\n      word-break: break-word;\n    }\n\n    strong {\n      color: var(--text);\n    }\n\n    hr {\n      border: 0;\n      border-top: 1px solid var(--rule);\n      margin: 2.5em 0;\n    }\n\n    .colophon {\n      margin-top: 3em;\n      padding-top: 1.4em;\n      border-top: 1px solid var(--rule);\n      font-family: var(--font-mono);\n      font-size: 11px;\n      letter-spacing: 0.04em;\n      text-transform: uppercase;\n      color: var(--muted);\n    }\n\n    @page {\n      size: A4;\n      margin: 22mm 18mm;\n    }\n\n    @media print {\n      :root {\n        --text: #1a1d21;\n        --muted: #57646b;\n        --rule: #d6dedb;\n        --accent: #1f6f5c;\n        --bg: #ffffff;\n        --surface: #ffffff;\n      }\n\n      .page {\n        max-width: none;\n        padding: 0;\n      }\n\n      a {\n        color: var(--text);\n        text-decoration: underline;\n      }\n\n      article h1, article h2, article h3, article h4 {\n        break-after: avoid;\n      }\n\n      blockquote, ul, ol, table {\n        break-inside: avoid;\n      }\n    }\n  </style>\n</head>\n\n<body>\n  <main class=\"page\">\n    <header class=\"masthead\">\n      <p class=\"kicker\">The Rundown AI · Дайджест</p>\n      <h1 class=\"title\">Новости искусственного интеллекта</h1>\n      <p class=\"date\">${dateLabel}</p>\n    </header>\n    <article>\n      ${content}\n    </article>\n    <footer class=\"colophon\">Переведено автоматически из оригинальной рассылки The Rundown AI</footer>\n  </main>\n</body>\n</html>`;\n\nconst buffer = Buffer.from(fullHtml, 'utf8');\nconst binaryData = await this.helpers.prepareBinaryData(buffer, 'newsletter-ru.html', 'text/html');\n\nreturn {\n  json: {\n    htmlDocument: fullHtml,\n  },\n  binary: {\n    data: binaryData,\n  },\n};"
+        "jsCode": "const content = ($json.html ?? '')\n  .replace(/[\\u200B-\\u200D\\u2060\\uFEFF]/g, '')\n  .replace(/<p>\\s*\\|\\s*<\\/p>/gi, '')\n  .trim();\n\nconst from = String($json.from ?? '').toLowerCase();\nconst isSimpleAi = from.includes('hi@simple.ai') || from.includes('simple.ai');\nconst publication = isSimpleAi ? {\n  pageTitle: 'Simple.AI — Перевод',\n  kicker: 'Simple.AI · По-русски',\n  title: 'Практический взгляд на искусственный интеллект',\n  footer: 'Переведено автоматически из оригинальной рассылки Simple.AI',\n  filename: 'simple-ai-ru.html',\n} : {\n  pageTitle: 'The Rundown AI — Дайджест',\n  kicker: 'The Rundown AI · Дайджест',\n  title: 'Новости искусственного интеллекта',\n  footer: 'Переведено автоматически из оригинальной рассылки The Rundown AI',\n  filename: 'newsletter-ru.html',\n};\n\nconst dateLabel = new Date().toLocaleDateString('ru-RU', {\n  day: 'numeric',\n  month: 'long',\n  year: 'numeric',\n});\n\nconst fullHtml = `<!doctype html>\n<html lang=\"ru\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>${publication.pageTitle}</title>\n\n  <style>\n    :root {\n      --text: #1a1d21;\n      --muted: #57646b;\n      --rule: #d6dedb;\n      --accent: #1f6f5c;\n      --bg: #ffffff;\n      --surface: #eef1f0;\n      --font-sans: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif;\n      --font-mono: ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace;\n    }\n\n    @media (prefers-color-scheme: dark) {\n      :root {\n        --text: #e7e9ea;\n        --muted: #9aa4a9;\n        --rule: #2a3134;\n        --accent: #4fd8b8;\n        --bg: #14171a;\n        --surface: #0c0e10;\n      }\n    }\n\n    :root[data-theme=\"dark\"] {\n      --text: #e7e9ea;\n      --muted: #9aa4a9;\n      --rule: #2a3134;\n      --accent: #4fd8b8;\n      --bg: #14171a;\n      --surface: #0c0e10;\n    }\n\n    :root[data-theme=\"light\"] {\n      --text: #1a1d21;\n      --muted: #57646b;\n      --rule: #d6dedb;\n      --accent: #1f6f5c;\n      --bg: #ffffff;\n      --surface: #eef1f0;\n    }\n\n    * {\n      box-sizing: border-box;\n    }\n\n    html, body {\n      margin: 0;\n      padding: 0;\n      background: var(--surface);\n    }\n\n    body {\n      font-family: var(--font-sans);\n      color: var(--text);\n      line-height: 1.62;\n      font-size: 16px;\n    }\n\n    .page {\n      max-width: 680px;\n      margin: 0 auto;\n      padding: 48px 56px 64px;\n      background: var(--bg);\n      overflow-wrap: anywhere;\n    }\n\n    .masthead {\n      padding-bottom: 20px;\n      margin-bottom: 32px;\n      border-bottom: 2px solid var(--rule);\n    }\n\n    .masthead .kicker {\n      font-family: var(--font-mono);\n      font-size: 12px;\n      letter-spacing: 0.12em;\n      text-transform: uppercase;\n      color: var(--accent);\n      margin: 0 0 10px;\n    }\n\n    .masthead .title {\n      font-family: var(--font-sans);\n      font-size: 28px;\n      font-weight: 700;\n      margin: 0 0 8px;\n      letter-spacing: -0.01em;\n      text-wrap: balance;\n    }\n\n    .masthead .date {\n      font-family: var(--font-mono);\n      font-size: 13px;\n      color: var(--muted);\n      margin: 0;\n    }\n\n    article h1, article h2, article h3, article h4 {\n      font-family: var(--font-sans);\n      font-weight: 700;\n      color: var(--text);\n      line-height: 1.3;\n      text-wrap: balance;\n    }\n\n    article h1 {\n      font-size: 24px;\n      margin: 1.8em 0 0.6em;\n    }\n\n    article h2 {\n      font-family: var(--font-mono);\n      font-size: 12px;\n      font-weight: 600;\n      color: var(--accent);\n      text-transform: uppercase;\n      letter-spacing: 0.08em;\n      margin: 2.4em 0 0.9em;\n      padding-bottom: 8px;\n      border-bottom: 1px solid var(--rule);\n    }\n\n    article h3 {\n      font-size: 18px;\n      margin: 1.8em 0 0.5em;\n    }\n\n    article h4 {\n      font-size: 16px;\n      margin: 1.6em 0 0.5em;\n    }\n\n    p, li {\n      margin: 0 0 1em;\n    }\n\n    ul, ol {\n      padding-left: 1.3em;\n      margin: 0 0 1.2em;\n    }\n\n    li {\n      margin-bottom: 0.5em;\n    }\n\n    blockquote {\n      margin: 1.5em 0;\n      padding: 2px 0 2px 18px;\n      border-left: 3px solid var(--accent);\n      color: var(--muted);\n    }\n\n    a {\n      color: var(--accent);\n      text-decoration: underline;\n      text-underline-offset: 2px;\n      word-break: break-word;\n    }\n\n    strong {\n      color: var(--text);\n    }\n\n    hr {\n      border: 0;\n      border-top: 1px solid var(--rule);\n      margin: 2.5em 0;\n    }\n\n    .colophon {\n      margin-top: 3em;\n      padding-top: 1.4em;\n      border-top: 1px solid var(--rule);\n      font-family: var(--font-mono);\n      font-size: 11px;\n      letter-spacing: 0.04em;\n      text-transform: uppercase;\n      color: var(--muted);\n    }\n\n    @page {\n      size: A4;\n      margin: 22mm 18mm;\n    }\n\n    @media print {\n      :root {\n        --text: #1a1d21;\n        --muted: #57646b;\n        --rule: #d6dedb;\n        --accent: #1f6f5c;\n        --bg: #ffffff;\n        --surface: #ffffff;\n      }\n\n      .page {\n        max-width: none;\n        padding: 0;\n      }\n\n      a {\n        color: var(--text);\n        text-decoration: underline;\n      }\n\n      article h1, article h2, article h3, article h4 {\n        break-after: avoid;\n      }\n\n      blockquote, ul, ol, table {\n        break-inside: avoid;\n      }\n    }\n  </style>\n</head>\n\n<body>\n  <main class=\"page\">\n    <header class=\"masthead\">\n      <p class=\"kicker\">${publication.kicker}</p>\n      <h1 class=\"title\">${publication.title}</h1>\n      <p class=\"date\">${dateLabel}</p>\n    </header>\n    <article>\n      ${content}\n    </article>\n    <footer class=\"colophon\">${publication.footer}</footer>\n  </main>\n</body>\n</html>`;\n\nconst buffer = Buffer.from(fullHtml, 'utf8');\nconst binaryData = await this.helpers.prepareBinaryData(buffer, publication.filename, 'text/html');\n\nreturn {\n  json: {\n    htmlDocument: fullHtml,\n  },\n  binary: {\n    data: binaryData,\n  },\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1392,
-        0
-      ],
+      "position": [1392, 0],
       "id": "0ea8b666-cb8c-4171-b109-8087b1ebf859",
       "name": "Code in JavaScript1"
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const previousData = $('Code in JavaScript').first().json;\nconst urlMap = previousData.urlMap ?? {};\n\nfunction extractText(value) {\n  if (typeof value === 'string') {\n    return value;\n  }\n\n  if (Array.isArray(value)) {\n    return value.map(extractText).join('');\n  }\n\n  if (value && typeof value === 'object') {\n    if (typeof value.text === 'string') {\n      return value.text;\n    }\n\n    if (typeof value.output_text === 'string') {\n      return value.output_text;\n    }\n\n    if (typeof value.content === 'string') {\n      return value.content;\n    }\n\n    if (Array.isArray(value.content)) {\n      return value.content.map(extractText).join('');\n    }\n\n    if (value.message?.content) {\n      return extractText(value.message.content);\n    }\n\n    if (value.choices?.[0]?.message?.content) {\n      return extractText(value.choices[0].message.content);\n    }\n\n    if (value.output) {\n      return extractText(value.output);\n    }\n\n    if (value.data) {\n      return extractText(value.data);\n    }\n  }\n\n  return '';\n}\n\nlet restoredMarkdown = extractText(\n  $json.output ??\n  $json.text ??\n  $json.content ??\n  $json.message?.content ??\n  $json.choices?.[0]?.message?.content ??\n  $json\n);\n\n// Falls Modell trotzdem ```markdown ... ``` zurückgibt, entfernen\nrestoredMarkdown = restoredMarkdown\n  .replace(/^```(?:markdown)?\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\n// URLs aus urlMap zurücksetzen\nfor (const [placeholder, url] of Object.entries(urlMap)) {\n  restoredMarkdown = restoredMarkdown.split(placeholder).join(url);\n}\n\n// Prüfen, ob noch Platzhalter übrig sind\nconst unreplacedPlaceholders = restoredMarkdown.match(/__URL_\\d+__/g) ?? [];\n\nreturn {\n  json: {\n    subject: previousData.subject ?? 'Без темы',\n    from: previousData.from ?? '',\n    translatedMarkdown: restoredMarkdown,\n    urlCount: Object.keys(urlMap).length,\n    unreplacedPlaceholders,\n    charactersAfterTranslation: restoredMarkdown.length,\n  },\n};"
+        "jsCode": "const previousData = $('Code in JavaScript').first().json;\nconst urlMap = previousData.urlMap ?? {};\n\nfunction extractText(value) {\n  if (typeof value === 'string') {\n    return value;\n  }\n\n  if (Array.isArray(value)) {\n    return value.map(extractText).join('');\n  }\n\n  if (value && typeof value === 'object') {\n    if (typeof value.text === 'string') {\n      return value.text;\n    }\n\n    if (typeof value.output_text === 'string') {\n      return value.output_text;\n    }\n\n    if (typeof value.content === 'string') {\n      return value.content;\n    }\n\n    if (Array.isArray(value.content)) {\n      return value.content.map(extractText).join('');\n    }\n\n    if (value.message?.content) {\n      return extractText(value.message.content);\n    }\n\n    if (value.choices?.[0]?.message?.content) {\n      return extractText(value.choices[0].message.content);\n    }\n\n    if (value.output) {\n      return extractText(value.output);\n    }\n\n    if (value.data) {\n      return extractText(value.data);\n    }\n  }\n\n  return '';\n}\n\nlet restoredMarkdown = extractText(\n  $json.output ??\n  $json.text ??\n  $json.content ??\n  $json.message?.content ??\n  $json.choices?.[0]?.message?.content ??\n  $json\n);\n\n// Falls Modell trotzdem ```markdown ... ``` zurückgibt, entfernen\nrestoredMarkdown = restoredMarkdown\n  .replace(/^```(?:markdown)?\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  // Защита на случай, если модель вернула мусор из скрытого preheader.\n  .replace(/[\\u200B-\\u200D\\u2060\\uFEFF]/g, '')\n  .replace(/^\\s*\\|\\s*$/gm, '')\n  .replace(/\\n{3,}/g, '\\n\\n')\n  .trim();\n\n// URLs aus urlMap zurücksetzen\nfor (const [placeholder, url] of Object.entries(urlMap)) {\n  restoredMarkdown = restoredMarkdown.split(placeholder).join(url);\n}\n\n// Prüfen, ob noch Platzhalter übrig sind\nconst unreplacedPlaceholders = restoredMarkdown.match(/__URL_\\d+__/g) ?? [];\n\nreturn {\n  json: {\n    subject: previousData.subject ?? 'Без темы',\n    from: previousData.from ?? '',\n    translatedMarkdown: restoredMarkdown,\n    urlCount: Object.keys(urlMap).length,\n    unreplacedPlaceholders,\n    charactersAfterTranslation: restoredMarkdown.length,\n  },\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1072,
-        0
-      ],
+      "position": [1072, 0],
       "id": "c0025f8a-042a-4418-aa2d-fb6e6c44b783",
       "name": "Code in JavaScript2"
     },
@@ -218,10 +200,7 @@
       },
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1.4,
-      "position": [
-        -352,
-        0
-      ],
+      "position": [-352, 0],
       "id": "397b950d-5fc1-4b73-a337-db54a7ce9f2f",
       "name": "Gmail Trigger",
       "credentials": {
@@ -234,9 +213,7 @@
   ],
   "connections": {
     "Email Trigger (IMAP)": {
-      "main": [
-        []
-      ]
+      "main": [[]]
     },
     "Filter": {
       "main": [
